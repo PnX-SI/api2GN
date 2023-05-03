@@ -71,7 +71,7 @@ class WFSImporter(Importer):
             xml_key, default = xml_key.split(":")
         new_tag = parent_tag.find(".//{*}" + xml_key)
         if new_tag is None:
-            return xml_key
+            return default or xml_key
         else:
             return new_tag.text or default
 
