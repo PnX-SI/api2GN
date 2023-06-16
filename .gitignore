@@ -1,5 +1,5 @@
-config.toml
-
+api2gn/var/config/parsers.py
+api2gn/contrib/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

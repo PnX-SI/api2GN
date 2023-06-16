@@ -1,28 +1,39 @@
-from marshmallow import Schema, fields
+from sqlalchemy import inspect
+from sqlalchemy.sql.schema import Column
+from geonature.core.gn_synthese.models import Synthese
 
 
-class SyntheseSchema(Schema):
-    cd_nom = fields.String(required=True)
-    observers = fields.String(required=True)
-    date_min = fields.String(required=True)
-    date_max = fields.String(required=True)
-    the_geom_4326 = fields.String()
-    the_geom_local = fields.String()
-    id_dataset = fields.String(required=True)
-    id_source = fields.String(required=True)
-    nom_cite = fields.String(required=True)
+class ValidationError(Exception):
+    pass
 
 
-class WFSSchema(Schema):
-    layer = fields.String()
-    version = fields.String()
+class MappingValidator:
+    def __init__(self, schema):
+        self.schema = schema
 
-
-class ImportSchema(Schema):
-    # TODO : custom validator to check no multiple :
-    url = fields.String(required=True)
-    type = fields.String(required=True)
-    geometry_col = fields.String()
-    mapping = fields.Nested(SyntheseSchema)
-    wfs = fields.Nested(WFSSchema)
-    limit = fields.Integer(missing=50)
+    def validate(self, data, **kwargs):
+        mapper = inspect(Synthese)
+        # for c in mapper.columns:
+        #     print(dir(c))
+        not_null_synthese_col = set(
+            [
+                col.key
+                for col in mapper.columns
+                if type(col) is Column
+                and col.nullable is False
+                and col.primary_key is False
+            ]
+        )
+        all_synthese_cols = set([col.key for col in mapper.columns])
+        mapping_cols = set([key for key, value in data.items()])
+        # validate if mapping columns exist in synthese
+        not_existing_cols = mapping_cols - all_synthese_cols
+        if not_existing_cols:
+            raise ValidationError(
+                f"The value(s) {not_existing_cols} does not exist in Synthese"
+            )
+        missing_required_cols = not_null_synthese_col - mapping_cols
+        if missing_required_cols:
+            raise ValidationError(
+                f"These columns are missing from your mapping : {missing_required_cols}"
+            )

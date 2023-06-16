@@ -1,50 +1,49 @@
 import requests
-import sys
 import xml.etree.ElementTree as ET
 import pygml
 
-from click.exceptions import ClickException
+from datetime import datetime
+import click
+
 from shapely.geometry import shape
 from geoalchemy2.shape import from_shape
-from sqlalchemy.sql import func
 
-from owslib.fes import PropertyIsLike, PropertyIsEqualTo
-from owslib.etree import etree
-from owslib.wfs import WebFeatureService
 
 from geonature.core.gn_synthese.models import Synthese
 from geonature.utils.env import db
 
+from api2gn.schema import MappingValidator
+from api2gn.mixins import GeometryMixin
+from api2gn.models import ParserModel
 
-class GeometryMixin:
-    def build_geom_local(self, geom_4326, srid):
-        return func.st_transform(func.st_setsrid(geom_4326, 4326), srid)
 
-    def build_geom_4326(self, geom, origin_srid):
-        return func.st_transform(func.st_setsrid(geom, origin_srid), 4326)
+class Parser(GeometryMixin):
+    name: str
+    mapping = dict()
+    limit: int = 100
+    url: str
+    api_filters = dict()
+    srid = None
 
-    def build_centroid_4326_from_local(self, geom, origin_srid):
-        return func.st_centroid(
-            func.st_transform(func.st_setsrid(geom, origin_srid), 4326)
+    def __init__(self, srid=None, mapping={}, name=None):
+        self.mapping = {**mapping, **self.mapping}
+        MappingValidator(self.mapping).validate(self.mapping)
+        self.srid = srid or self.srid
+        self.name = name or self.name
+        self.geometry_col = (
+            "the_geom_local" if self.local_srid == self.srid else "the_geom_4326"
         )
+        self.parser_obj = self._get_or_create_parser()
+        self.last_import = ParserModel.query.filter_by(name=self.name).one().last_import
 
-    def build_centroid_from_4326(self, geom):
-        return func.st_centroid(geom)
+    def _get_or_create_parser(self):
+        parser = ParserModel.query.filter_by(name=self.name).one_or_none()
+        if not parser:
+            parser = ParserModel(name=self.name, type=self.__class__.__name__)
+            db.session.add(parser)
+            db.session.commit()
 
-    def geom_from_geojson(geojson):
-        return func.st_geomfromgeojson()
-
-
-class Importer(GeometryMixin):
-    model = None
-
-    def __init__(self, schema):
-        self.url = schema["url"]
-        self.geometry_col = schema["geometry_col"]
-        self.mapping = schema["mapping"]
-        self.limit = schema["limit"]
-
-    def fetch_data(self):
+    def fetch_data(self, filters={}):
         raise NotImplemented
 
     def build_objects(self):
@@ -53,17 +52,42 @@ class Importer(GeometryMixin):
     def insert(self, obj):
         db.session.add(obj)
 
+    def save_history(self, nb_row):
+        self.parser_obj.last_import = datetime.now()
+        db.session.commit()
 
-class JSONImporter(Importer):
+    def run(self):
+        click.secho(f"Start import {self.name} ...", fg="green")
+        filters = {"page": 0}
+        nb_line = 0
+        while True:
+            data = self.fetch_data(filters)
+            for obj in self.build_objects(data):
+                self.insert(obj)
+            nb_line = nb_line + len(data)
+            if not data or (data and len(data) < self.limit):
+                db.session.commit()
+                self.save_history(nb_line)
+                click.secho(f"Successfully import {nb_line} row(s)", fg="green")
+
+                break
+            filters["page"] = filters["page"] + 1
+
+
+class JSONParser(Parser):
+    def __init__(self, srid=None, mapping={}, name=None):
+        super().__init__(srid, mapping, name)
+
     def build_object(self):
         pass
 
 
-class WFSImporter(Importer):
-    def __init__(self, schema):
-        super().__init__(schema)
-        self.layer = schema["wfs"]["layer"]
-        self.version = schema["wfs"]["version"]
+class WFSParser(Parser):
+    layer: str
+    wfs_version: str
+
+    def __init__(self, srid=None, mapping={}, name=None):
+        super().__init__(srid, mapping)
 
     def get_xml_value(self, parent_tag, xml_key):
         default = None
@@ -97,8 +121,8 @@ class WFSImporter(Importer):
         print(f"Tag containning geometry ({self.mapping[self.geometry_col]}) not found")
         return None
 
-    def fetch_data(self):
-        # wfs = WebFeatureService(url=self.url, version=self.wfs["version"])
+    def fetch_data(self, filters={}):
+        # wfs = WebFeatureService(url=self.url, version=self.wfs["wfs_version"])
 
         # _filter = PropertyIsEqualTo("code_dept", "05")
         # filterxml = etree.tostring(_filter.toXML()).decode("utf-8")
@@ -114,27 +138,37 @@ class WFSImporter(Importer):
         # return None
         # return wfs.getfeature(typename=self.wfs["layer"])
         count_or_max_feature = (
-            "count" if self.version in ("2.0.0", "2.0.1") else "maxFeatures"
+            "count" if self.wfs_version in ("2.0.0", "2.0.1") else "maxFeatures"
         )
-        response = requests.get(
-            self.url,
-            params={
-                "version": self.version,
-                "request": "GetFeature",
-                "TYPENAME": self.layer,
-                count_or_max_feature: self.limit,
-                "service": "WFS",
-            },
-        )
+        api_filters = {
+            **self.api_filters,
+            **filters,
+            "version": self.wfs_version,
+            "request": "GetFeature",
+            "TYPENAME": self.layer,
+            count_or_max_feature: self.limit,
+            "service": "WFS",
+        }
+        response = requests.get(self.url, params=api_filters)
         if response.status_code == 200:
             return ET.fromstring(response.text)
         else:
             raise requests.exceptions.HTTPError("Fail to fetch the WFS")
 
+    def late_filter_feature(self, feature):
+        """
+        In WFS filters are hard to implement, but with this fonction you can
+        implement "late filters". The API will fetch all data, but only the features
+        match the filter will be return by the build_objects func
+        """
+        return True
+
     def build_objects(self, data):
         for node in data:
             current_tag = node[0]
             synthese_dict_value = {}
+            if not self.late_filter_feature(current_tag):
+                continue
             for gn_col, xml_key in self.mapping.items():
                 val = self.get_xml_value(current_tag, xml_key)
                 synthese_dict_value[gn_col] = val
@@ -151,7 +185,6 @@ class WFSImporter(Importer):
                     synthese_dict_value[
                         "the_geom_point"
                     ] = self.build_centroid_4326_from_local(wkb_geom, 2154)
-                    print("FINALLY", synthese_dict_value)
                 elif self.geometry_col == "the_geom_4326":
                     synthese_dict_value["the_geom_local"] = self.build_geom_local(
                         wkb_geom, 2154

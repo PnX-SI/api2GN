@@ -18,7 +18,15 @@ setuptools.setup(
     package_dir={"": "."},
     install_requires=requirements,
     tests_require=[],
-    entry_points={"console_scripts": ["gn-parser = api2gn.main:cli"]},
+    entry_points={
+        "console_scripts": ["gn-parser = api2gn.main:cli"],
+        "gn_module": [
+            "code = api2gn:MODULE_CODE",
+            "blueprint = api2gn.blueprint:blueprint",
+            "config_schema = api2gn.config_schema:Api2GNSchema",
+            "migrations = api2gn:migrations",
+        ],
+    },
     classifiers=[
         "Development Status :: 1 - Planning",
         "Intended Audience :: Developers",
