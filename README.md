@@ -20,6 +20,6 @@ Copier le fichier d'exemple `var/config/parsers.example.py` en `var/config/parse
     ```
 
 
-###TODO:
+### TODO:
 
-- Enlever "name" des parser. Le nom est celui de la classe
+- Enlever "name" des parser. Le nom est celui de la classe (à remplacer par label ?)
