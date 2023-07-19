@@ -11,7 +11,7 @@ class MappingValidator:
     def __init__(self, schema):
         self.schema = schema
 
-    def validate(self, data, **kwargs):
+    def validate(self, **kwargs):
         mapper = inspect(Synthese)
         # for c in mapper.columns:
         #     print(dir(c))
@@ -25,7 +25,7 @@ class MappingValidator:
             ]
         )
         all_synthese_cols = set([col.key for col in mapper.columns])
-        mapping_cols = set([key for key, value in data.items()])
+        mapping_cols = set([key for key, value in self.schema.items()])
         # validate if mapping columns exist in synthese
         not_existing_cols = mapping_cols - all_synthese_cols
         if not_existing_cols:

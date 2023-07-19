@@ -1,11 +1,12 @@
 import requests
 import xml.etree.ElementTree as ET
 import pygml
-import sleep
+from time import sleep
 
 from datetime import datetime
 import click
 
+from sqlalchemy.sql import func
 from shapely.geometry import shape
 from geoalchemy2.shape import from_shape
 
@@ -15,16 +16,18 @@ from geonature.utils.env import db
 from geonature.utils.config import config
 
 from api2gn.schema import MappingValidator
-from api2gn.mixins import GeometryMixin
+from api2gn.mixins import GeometryMixin, NomenclatureMixin
 from api2gn.models import ParserModel
 
 
 module_config = config["API2GN"]
 
 
-class Parser(GeometryMixin):
+class Parser(GeometryMixin, NomenclatureMixin):
     name: str
     mapping = dict()
+    constant_fields = dict()
+    dynamic_fields = dict()
     limit: int = 100
     url: str
     api_filters = dict()
@@ -34,12 +37,16 @@ class Parser(GeometryMixin):
     def __init__(
         self,
     ):
-        MappingValidator(self.mapping).validate(self.mapping)
+        MappingValidator({**self.mapping, **self.constant_fields}).validate()
         self.geometry_col = (
             "the_geom_local" if self.local_srid == self.srid else "the_geom_4326"
         )
         self.parser_obj = self._get_or_create_parser()
         self.last_import = ParserModel.query.filter_by(name=self.name).one().last_import
+
+    @property
+    def items(self):
+        return self.root
 
     def _get_or_create_parser(self):
         parser = ParserModel.query.filter_by(name=self.name).one_or_none()
@@ -47,27 +54,29 @@ class Parser(GeometryMixin):
             parser = ParserModel(name=self.name, type=self.__class__.__name__)
             db.session.add(parser)
             db.session.commit()
+        return parser
 
     def request_or_retry(self, url, **kwargs):
-        try_get = module_config.PARSER_NUMBER_OF_TRIES
+        try_get = module_config["PARSER_NUMBER_OF_TRIES"]
         assert try_get > 0
         while try_get:
             response = requests.get(url, allow_redirects=True, **kwargs)
-            if response.status_code in module_config.PARSER_RETRY_HTTP_STATUS:
+            if response.status_code in module_config["PARSER_RETRY_HTTP_STATUS"]:
                 click.info("Failed to fetch url {}. Retrying ...".format(url))
-                sleep(module_config.PARSER_RETRY_SLEEP_TIME)
+                sleep(module_config["PARSER_RETRY_SLEEP_TIME"])
                 try_get -= 1
             elif response.status_code == 200:
                 return response
             else:
                 break
-        click.warning(
+        click.secho(
             "Failed to fetch {} after {} times. Status code : {}.".format(
-                url, module_config.PARSER_NUMBER_OF_TRIES, response.status_code
-            )
+                url, module_config["PARSER_NUMBER_OF_TRIES"], response.status_code
+            ),
+            fg="red",
         )
         raise click.ClickException(
-            _("Failed to download {url}. HTTP status code {status_code}").format(
+            ("Failed to download {url}. HTTP status code {status_code}").format(
                 url=response.url, status_code=response.status_code
             )
         )
@@ -101,7 +110,7 @@ class Parser(GeometryMixin):
             nb_rows += 1
 
         db.session.commit()
-        self.save_history(nb_rows)
+        self.save_history()
         self.end()
         click.secho(f"Successfully import {nb_rows} row(s)", fg="green")
 
@@ -110,9 +119,33 @@ class JSONParser(Parser):
     def __init__(self):
         super().__init__()
 
-    def build_object(self):
-        # TODO
-        pass
+    def get_geom(self, row):
+        """
+        Must return a wkb geom
+        """
+        shapely_geom = shape(row["geometry"])
+        return from_shape(shapely_geom)
+
+    def build_object(self, row):
+        synthese_dict = {}
+        for gn_col, const in self.constant_fields.items():
+            synthese_dict[gn_col] = const
+            self.mapping.pop(gn_col, None)
+        for gn_col, func in self.dynamic_fields.items():
+            row_value = self.mapping.pop(gn_col)
+            synthese_dict[gn_col] = func(row_value)
+
+        for gn_col, json_key in self.mapping.items():
+            if gn_col.startswith("id_nomenclature"):
+                synthese_dict[gn_col] = func.ref_nomenclatures.get_id_nomenclature(
+                    self.nomenclature_mapping[gn_col], row[json_key["key"]]
+                )
+            else:
+                synthese_dict[gn_col] = row[json_key]
+        wkb_geom = self.get_geom(row)
+        if wkb_geom:
+            synthese_dict = self.fill_dict_with_geom(synthese_dict, wkb_geom)
+        return Synthese(**synthese_dict)
 
     def next_row(self):
         while True:
@@ -122,10 +155,10 @@ class JSONParser(Parser):
                 self.limit: self.limit,
             }
             response = self.request_or_retry(self.url, params=filters)
-            data = response.json()
-            for row in data:
+            self.root = response.json()
+            for row in self.items:
                 yield row
-            if len(data) < self.limit:
+            if len(self.items) < self.limit:
                 break
             self.api_filters[self.page_parameter] += 1
 
@@ -136,6 +169,10 @@ class WFSParser(Parser):
 
     def __init__(self):
         super().__init__()
+
+    @property
+    def items(self):
+        return self.root.text
 
     def get_xml_value(self, parent_tag, xml_key):
         default = None
@@ -185,8 +222,8 @@ class WFSParser(Parser):
             count_or_max_feature: self.limit,
             "service": "WFS",
         }
-        response = self.request_or_retry(self.url, params=api_filters)
-        xml_root = ET.fromstring(response.text)
+        self.root = self.request_or_retry(self.url, params=api_filters)
+        xml_root = ET.fromstring(self.items)
         for xml_node in xml_root:
             yield xml_node
 

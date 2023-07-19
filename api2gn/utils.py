@@ -17,3 +17,7 @@ def get_parser(name):
     index = parsers.index(name)
     module = import_module("api2gn.var.config.parsers")
     return getattr(module, parsers[index])
+
+
+def from_cd_nomenclature(column_name, mnemonique_type):
+    return (column_name, mnemonique_type)
