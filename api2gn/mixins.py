@@ -13,7 +13,7 @@ class NomenclatureMixin:
         "id_nomenclature_grp_typ": "TYP_INF_GEO",
         "id_nomenclature_behaviour": "OCC_COMPORTEMENT",
         "id_nomenclature_obs_technique": "METH_OBS",
-        "id_nomenclature_bmnemonique_typeo_status": "STATUT_BIO",
+        "id_nomenclature_bio_status": "STATUT_BIO",
         "id_nomenclature_bio_condition": "ETA_BIO",
         "id_nomenclature_naturalness": "NATURALITE",
         "id_nomenclature_exist_proof": "PREUVE_EXIST",

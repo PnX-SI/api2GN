@@ -1,3 +1,7 @@
+import sys
+
+import click
+
 from sqlalchemy import inspect
 from sqlalchemy.sql.schema import Column
 from geonature.core.gn_synthese.models import Synthese
@@ -29,11 +33,14 @@ class MappingValidator:
         # validate if mapping columns exist in synthese
         not_existing_cols = mapping_cols - all_synthese_cols
         if not_existing_cols:
-            raise ValidationError(
-                f"The value(s) {not_existing_cols} does not exist in Synthese"
+            click.secho(
+                f"The value(s) {not_existing_cols} does not exist in Synthese", fg="red"
             )
+            sys.exit()
         missing_required_cols = not_null_synthese_col - mapping_cols
         if missing_required_cols:
-            raise ValidationError(
-                f"These columns are missing from your mapping : {missing_required_cols}"
+            click.secho(
+                f"These columns are missing from your mapping : {missing_required_cols}",
+                fg="red",
             )
+            sys.exit()

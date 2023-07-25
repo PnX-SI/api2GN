@@ -1,5 +1,4 @@
 requests
-toml
 marshmallow
-owslib
 pygml
+geonature>2.12.0

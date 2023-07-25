@@ -15,22 +15,30 @@ def test(row):
 
 class GeoNatureParser(JSONParser):
     srid = 4326
+    page_parameter = "offset"
+    progress_bar = True
 
     def __init__(self):
-        super().__init__()
         self.api_filters = {**GeoNatureParser.api_filters, **self.api_filters}
-        last_import = self.parser_obj.last_import
-        if last_import:
-            self.api_filters["filter_d_up_date_modification"] = last_import
         self.mapping = {**GeoNatureParser.mapping, **self.mapping}
         self.constant_fields = {
             **GeoNatureParser.constant_fields,
             **self.constant_fields,
         }
+        super().__init__()
+
+        # filter to have only new data
+        # if last_import:
+        #     self.api_filters["filter_d_up_date_modification"] = parser.last_import
+        self.validate_maping()
 
     @property
     def items(self):
         return self.root["items"]
+
+    @property
+    def total(self):
+        return self.root["total_filtered"]
 
     def get_geom(self, row):
         geom = wkt.loads(row["wkt_4326"])
