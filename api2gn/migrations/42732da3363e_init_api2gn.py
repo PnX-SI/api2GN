@@ -23,9 +23,11 @@ def upgrade():
             CREATE TABLE api2gn.parser (
                 id SERIAL NOT NULL PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE,
+                description text,
                 last_import timestamp,
-                nb_row integer,
-                type character varying
+                nb_row_total integer,
+                nb_row_last_import integer,
+                schedule_frequency integer
             );
         """
     )

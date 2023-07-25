@@ -6,11 +6,6 @@ from geoalchemy2.shape import from_shape
 
 
 from api2gn.parsers import JSONParser
-from api2gn.utils import from_cd_nomenclature
-
-
-def test(row):
-    return row * 2
 
 
 class GeoNatureParser(JSONParser):
@@ -28,8 +23,10 @@ class GeoNatureParser(JSONParser):
         super().__init__()
 
         # filter to have only new data
-        # if last_import:
-        #     self.api_filters["filter_d_up_date_modification"] = parser.last_import
+        if self.parser_obj.last_import:
+            self.api_filters[
+                "filter_d_up_date_modification"
+            ] = self.parser_obj.last_import
         self.validate_maping()
 
     @property

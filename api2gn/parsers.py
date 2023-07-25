@@ -27,22 +27,23 @@ module_config = config["API2GN"]
 class Parser(GeometryMixin, NomenclatureMixin):
     """
     Attributes:
-        mapping(dict): blabla
-        constant_fields(dict): blabla
-        dynamic_fields(dict): blabla
+        mapping(dict): TODO
+        constant_fields(dict): TODO
+        dynamic_fields(dict): TODO
     """
 
     name: str
+    description: str = ""
     mapping = dict()
     constant_fields = dict()
     dynamic_fields = dict()
     additionnal_fields = dict()
-    limit: int = 100
+    limit: int = None
     url: str
     api_filters = dict()
     srid = None
     progress_bar = False
-
+    schedule_frequency = None
     page_parameter = "page"
     limit_parameter = "limit"
 
@@ -70,7 +71,11 @@ class Parser(GeometryMixin, NomenclatureMixin):
     def _get_or_create_parser(self):
         parser = ParserModel.query.filter_by(name=self.name).one_or_none()
         if not parser:
-            parser = ParserModel(name=self.name, type=self.__class__.__name__)
+            parser = ParserModel(
+                name=self.name,
+                description=self.description,
+                schedule_frequency=self.schedule_frequency,
+            )
             db.session.add(parser)
             db.session.commit()
         return parser
@@ -117,12 +122,16 @@ class Parser(GeometryMixin, NomenclatureMixin):
 
     def save_history(self):
         self.parser_obj.last_import = datetime.now()
+        self.parser_obj.nb_row_last_import = self.nb_row_imported
+        self.parser_obj.nb_row_total = self.nb_row_imported + (
+            self.parser_obj.nb_row_total or 0
+        )
         db.session.commit()
 
     def run(self):
         click.secho(f"Start import {self.name} ...", fg="green")
         self.start()
-        nb_row_imported = 0
+        self.nb_row_imported = 0
         previous_percetage = 0
         click.secho("Fetching data from source", fg="green")
         if self.progress_bar:
@@ -132,10 +141,10 @@ class Parser(GeometryMixin, NomenclatureMixin):
             if not obj:
                 continue
             self.insert(obj)
-            nb_row_imported += 1
+            self.nb_row_imported += 1
             if self.progress_bar:
-                previous_percetage = (nb_row_imported / self.total) * 100
-                new_percentage = (nb_row_imported / self.total) * 100
+                previous_percetage = (self.nb_row_imported / self.total) * 100
+                new_percentage = (self.nb_row_imported / self.total) * 100
                 to_update = new_percentage - previous_percetage
                 pbar.update(to_update)
         if self.progress_bar:
@@ -148,12 +157,11 @@ class Parser(GeometryMixin, NomenclatureMixin):
         db.session.commit()
         self.save_history()
         self.end()
-        click.secho(f"Successfully import {nb_row_imported} row(s)", fg="green")
+        click.secho(f"Successfully import {self.nb_row_imported} row(s)", fg="green")
 
 
 class JSONParser(Parser):
-    def __init__(self):
-        super().__init__()
+    limit = 100
 
     def get_geom(self, row):
         """
@@ -217,9 +225,6 @@ class WFSParser(Parser):
     layer: str
     wfs_version: str
 
-    def __init__(self):
-        super().__init__()
-
     @property
     def sub_items(self):
         """
@@ -279,9 +284,10 @@ class WFSParser(Parser):
             "version": self.wfs_version,
             "request": "GetFeature",
             "TYPENAME": self.layer,
-            count_or_max_feature: self.limit,
             "service": "WFS",
         }
+        if self.limit:
+            api_filters[count_or_max_feature] = self.limit
         self.root = self.request_or_retry(self.url, params=api_filters)
         for xml_node in self.items:
             yield xml_node
