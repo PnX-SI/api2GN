@@ -10,7 +10,6 @@ import click
 from sqlalchemy.sql import func
 from shapely.geometry import shape
 from geoalchemy2.shape import from_shape
-from tqdm import tqdm
 
 from geonature.core.gn_synthese.models import Synthese
 from geonature.utils.env import db
