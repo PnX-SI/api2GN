@@ -1,5 +1,6 @@
 api2gn/var/config/parsers.py
 api2gn/var/config/utils.py
+api2gn/var/config/.env
 api2gn/contrib/*
 
 .vscode/*

@@ -169,7 +169,7 @@ class JSONParser(Parser):
         Must return a wkb geom
         """
         shapely_geom = shape(row["geometry"])
-        return from_shape(shapely_geom)
+        return from_shape(shapely_geom, srid=self.srid)
 
     def build_object(self, row):
         synthese_dict = {}
@@ -240,14 +240,11 @@ class WFSParser(Parser):
         return ET.fromstring(self.root.text)
 
     def get_xml_value(self, parent_tag, xml_key):
-        default = None
-        if ":" in xml_key:
-            xml_key, default = xml_key.split(":")
         new_tag = parent_tag.find(".//{*}" + xml_key)
         if new_tag is None:
-            return default or xml_key
+            return None
         else:
-            return new_tag.text or default
+            return new_tag.text
 
     def get_geom(self, xml_feature):
         # the tag containing the gml
@@ -265,7 +262,7 @@ class WFSParser(Parser):
                     ET.tostring(geometry_tag, encoding="unicode", method="xml")
                 )
                 shapely_geom = shape(geom.geometry)
-                return from_shape(shapely_geom)
+                return from_shape(shapely_geom, srid=self.srid)
             else:
                 print("Geometry tag not found for this feature")
                 return None
