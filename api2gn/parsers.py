@@ -7,6 +7,7 @@ from time import sleep
 from datetime import datetime
 import click
 
+from tqdm import tqdm
 from sqlalchemy.sql import func
 from shapely.geometry import shape
 from geoalchemy2.shape import from_shape
@@ -127,7 +128,7 @@ class Parser(GeometryMixin, NomenclatureMixin):
         )
         db.session.commit()
 
-    def run(self):
+    def run(self, dry_run=False):
         click.secho(f"Start import {self.name} ...", fg="green")
         self.start()
         self.nb_row_imported = 0
@@ -153,7 +154,8 @@ class Parser(GeometryMixin, NomenclatureMixin):
             "Successfully fetch data from source. Inserting data in db now...",
             fg="green",
         )
-        db.session.commit()
+        if not dry_run:
+            db.session.commit()
         self.save_history()
         self.end()
         click.secho(f"Successfully import {self.nb_row_imported} row(s)", fg="green")

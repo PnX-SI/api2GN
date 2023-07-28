@@ -15,6 +15,7 @@ def cmd_list_parsers():
 
 @click.command()
 @click.argument("name")
-def run(name):
+@click.option("--dry-run", is_flag=True)
+def run(name, dry_run):
     Parser = get_parser(name)
-    Parser().run()
+    Parser().run(dry_run)
