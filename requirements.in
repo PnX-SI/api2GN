@@ -3,3 +3,4 @@ requests
 marshmallow
 pygml
 geonature>2.12.0
+tqdm
