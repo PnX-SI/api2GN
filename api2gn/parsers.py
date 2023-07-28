@@ -43,7 +43,6 @@ class Parser(GeometryMixin, NomenclatureMixin):
     api_filters = dict()
     srid = None
     progress_bar = False
-    schedule_frequency = None
     page_parameter = "page"
     limit_parameter = "limit"
 
@@ -74,7 +73,6 @@ class Parser(GeometryMixin, NomenclatureMixin):
             parser = ParserModel(
                 name=self.name,
                 description=self.description,
-                schedule_frequency=self.schedule_frequency,
             )
             db.session.add(parser)
             db.session.commit()

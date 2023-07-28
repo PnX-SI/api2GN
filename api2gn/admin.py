@@ -23,8 +23,9 @@ class Api2GNAdmin(ModelView):
         nb_row_last_import="Nombre au dernier import",
         schedule_frequency="Fréquence de MAJ (en jour)",
     )
+    form_columns = ("schedule_frequency",)
 
-    can_edit = False
+    can_edit = True
     can_delete = False
 
 
