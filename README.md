@@ -135,7 +135,7 @@ Renseignez le nom de la classe dans "Nom du parser", puis la fréquence à laque
 
 ![Alt text](./doc/medias/admin_parser_form.png "Formulaire des parser")
 
-![Alt text](./doc/medias/admin_parser.png "Liste des parsers")
+![Alt text](./doc/medias/admin-parser.png "Liste des parsers")
 
 
 
@@ -171,10 +171,3 @@ Attributes surcouchable:
 
 ```
 
-
-
-
-### TODO:
-
-- Mettre en place les cron
-- doc sur les paramètre sur module
