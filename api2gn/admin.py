@@ -1,12 +1,15 @@
 from flask_admin.contrib.sqla import ModelView
 
 from geonature.core.admin.admin import admin
+from geonature.core.admin.utils import CruvedProtectedMixin
 from geonature.utils.env import db
 
 from api2gn.models import ParserModel
 
 
 class Api2GNAdmin(ModelView):
+    module_code = "ADMIN"
+    object_code = "PARSER"
     column_list = (
         "name",
         "description",
@@ -23,10 +26,10 @@ class Api2GNAdmin(ModelView):
         nb_row_last_import="Nombre au dernier import",
         schedule_frequency="Fréquence de MAJ (en jour)",
     )
-    form_columns = ("schedule_frequency",)
-
-    can_edit = True
-    can_delete = False
+    form_columns = (
+        "name",
+        "schedule_frequency",
+    )
 
 
 admin.add_view(Api2GNAdmin(ParserModel, db.session, category="Api2GN", name="Parsers"))
