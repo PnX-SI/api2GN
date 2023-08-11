@@ -23,14 +23,14 @@ Copier le fichier d'exemple `var/config/parsers.example.py` en `var/config/parse
 
 Pour construire un parser, créez un fichier `parsers.py` dans le répertoire `api2gn/var/config`. Vous pouvez vous inspirer du fichier du fichier `parsers.py.exemple` présent dans ce dossier.
 Un parser est une classe Python, qui hérite d'autre parser pour en faciliter l'écriture (cf `GeoNatureParser`)
-Le principe d'un parser est qu'il va se connecter à une API tierce et essayer d'insérer les données qui lui sont renvoyées dans le Synthese de GeoNature.
+Le principe d'un parser est qu'il va se connecter à une API tierce et essayer d'insérer les données qui lui sont renvoyées dans la Synthese de GeoNature.
 Un parser va donc "décrire" le procesus d'échange de données entre ces deux entités.
 Pour cela, la classe décrivant le parser doit définir plusieurs attributs :
 
 - `name(str)`: le nom du parser
 - `url(str)`: l'url du flux auquel on se connecte
 - `mapping(dict[str, str], default={}`): dictionnaire permettant de faire matcher les champs source et les champs de destination. Ici la clé est le nom de la colonne dans le GeoNature de destination et la valeur le nom du champs dans la source externe
-- `constant_field(dict[str, any], default={}`) : dictionnaire permettant de passer des constantes lorsque la valeur attendu dans la Synthese n'est pas présente dans le flux externe
+- `constant_field(dict[str, any], default={}`) : dictionnaire permettant de passer des constantes lorsque la valeur attendue dans la Synthese n'est pas présente dans le flux externe. La clé est le nom de la colonne dans la Synthèse et la valeur, la constante à insérer
 - `dynamic_fields(dict[str, func], default={}`) : dictionnaire permettant de passer des fonctions calculant des valeurs dynamiques en fonction des valeurs de chaque ligne (la fonction prend en paramètre `row`: la ligne courante renvoyée par l'API)
 - `additionnal_fields(dict[str, str], default={}`) : dictionnaire permettant remplir le champs `additionnal_data` de la synthese avec des champs de la source. La clé du dictionnaire correspond au nom que l'on veut avoir pour le champs additionnel dans la synthese. La valeur du dictionnaire correspond au nom du champ dans la source externe.
 - `api_filters(dict[str, any])`: dictionnaire de filtres à l'API. La clé étant le champs à filtrer, la valeur étant la valeur du filtre. Fonctionnel uniquement avec le `JSONParser`, pour le `WFSParser` il est conseillé d'utiliser la fonction `late_filter_feature(self, feature)` qui opère des filtres à postériori.
@@ -126,6 +126,17 @@ class GeoNatureParser2(GeoNatureParser):
 
 ```
 
+## Lancement automatique des parsers
+
+En plus de pouvoir lancer les parsers depuis le terminal, le module offre la possibilité de les lancer automatiquement grâce à des tâches planifiés.
+Pour cela, il faut ajouter les parsers que l'on souhaite synchroniser dans le backoffice GeoNature (section API2GN/Parsers)
+
+Renseignez le nom de la classe dans "Nom du parser", puis la fréquence à laquelle le parser doit être lancé.
+
+![Alt text](./doc/medias/admin_parser_form.png "Formulaire des parser")
+
+![Alt text](./doc/medias/admin_parser.png "Liste des parsers")
+
 
 
 ## Développer un nouveau parser
@@ -144,7 +155,7 @@ Attributes surcouchable:
 - `limit (default=100)`: nombre de ligne renvoyé à chaque appel API
 - `page_parameter (default="page")`: nom du paramètre de l'API pour la pagination
 - `limit_parameter (default="limit")`: nom du paramètre de l'API pour la limite
-- `items (default=None)`: lorsque l'API est chargée, les données sont mis dans l'attribut `self.root`. Si les données de l'API ne sont pas directement à la racine de `self.root`, il est possible de le définit ici :
+- `items (default=None)`: lorsque l'API est chargée, les données sont mis dans l'attribut `self.root`. Si les données de l'API ne sont pas directement à la racine de `self.root`, il est possible de le définit ici.
 - `progress_bar (default=Fakse)`: afficher une bar de progression lors de l'execution de la commande
 - `total (default=None)`: propriété definissant ou trouver le nombre total d'item renvoyé par l'API (à partir de `self.root` - voir si dessous). (Obligatoire si `progress_bar=True`)
 
