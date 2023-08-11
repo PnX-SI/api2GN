@@ -10,7 +10,7 @@ from api2gn.utils import list_parsers, get_parser
 def cmd_list_parsers():
     parsers = list_parsers()
     for p in parsers:
-        click.secho(f"🌵 {p.name}", fg="green")
+        click.secho(f"🌵 {p.name} - {p.description}", fg="green")
 
 
 @click.command()
