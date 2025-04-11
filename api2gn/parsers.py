@@ -178,12 +178,17 @@ class JSONParser(Parser):
         return from_shape(shapely_geom, srid=self.srid)
 
     def build_object(self, row):
+        if not row:
+            return None
+
         synthese_dict = {}
         for gn_col, const in self.constant_fields.items():
             synthese_dict[gn_col] = const
             self.mapping.pop(gn_col, None)
         for gn_col, _func in self.dynamic_fields.items():
-            synthese_dict[gn_col] = _func(row)
+            value = _func(row)
+            if value:
+                synthese_dict[gn_col] = _func(row)
             self.mapping.pop(gn_col, None)
         if self.additionnal_fields:
             for add_field, json_field in self.additionnal_fields.items():
@@ -193,20 +198,21 @@ class JSONParser(Parser):
                 ]
 
         for gn_col, json_field in self.mapping.items():
-            if gn_col.startswith("id_nomenclature"):
-                try:
-                    nomenclature_mnemonique_type = self.nomenclature_mapping[gn_col]
-                except KeyError as e:
-                    click.secho(
-                        f"\nCannot find a nomenclature mnemonique type for `{gn_col}` - Please update the `nomenclature_mapping` class attribute",
-                        fg="red",
+            if row.get(json_field):
+                if gn_col.startswith("id_nomenclature"):
+                    try:
+                        nomenclature_mnemonique_type = self.nomenclature_mapping[gn_col]
+                    except KeyError as e:
+                        click.secho(
+                            f"\nCannot find a nomenclature mnemonique type for `{gn_col}` - Please update the `nomenclature_mapping` class attribute",
+                            fg="red",
+                        )
+                        raise click.ClickException("Stop import")
+                    synthese_dict[gn_col] = func.ref_nomenclatures.get_id_nomenclature(
+                        nomenclature_mnemonique_type, row.get(json_field)
                     )
-                    raise click.ClickException("Stop import")
-                synthese_dict[gn_col] = func.ref_nomenclatures.get_id_nomenclature(
-                    nomenclature_mnemonique_type, row[json_field]
-                )
-            else:
-                synthese_dict[gn_col] = row[json_field]
+                else:
+                    synthese_dict[gn_col] = row.get(json_field)
         wkb_geom = self.get_geom(row)
         if wkb_geom:
             synthese_dict = self.fill_dict_with_geom(synthese_dict, wkb_geom)
