@@ -162,6 +162,14 @@ class Parser(GeometryMixin, NomenclatureMixin):
 class JSONParser(Parser):
     limit = 100
 
+    def validate_maping(self):
+        """
+        Validate the mapping throw the model (only Synthese model implemented)
+        """
+        MappingValidator(
+            {**self.mapping, **self.constant_fields, **self.dynamic_fields}
+        ).validate()
+        
     def get_geom(self, row):
         """
         Must return a wkb geom
