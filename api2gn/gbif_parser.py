@@ -1,5 +1,4 @@
-import logging
-from pygbif import occurrences, registry, species
+from pygbif import occurrences, registry
 from shapely import wkt
 from sqlalchemy import select
 from sqlalchemy.sql import func

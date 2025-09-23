@@ -46,7 +46,10 @@ def generate_date_range(partial_date: str) -> list[str,str]:
         min_date = partial_date
         max_date = partial_date
     else:
-        raise ValueError("Invalid date format. Please use YYYY, YYYY-MM, or YYYY-MM-DD.")
+        try:
+            min_date = max_date = parse(partial_date).strftime('%Y-%m-%d %H:%M:%S')
+        except:
+            raise ValueError(f"Invalid date format for {partial_date}. Please use YYYY, YYYY-MM, or a valid date format.")
 
     return min_date, max_date
 
