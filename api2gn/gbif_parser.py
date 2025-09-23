@@ -147,6 +147,8 @@ class GBIFParser(JSONParser):
                 .where(TaxrefLiens.ct_sp_id == str(self.data["taxonKey"]))
                 .limit(1)
             )
+            if not cd_nom:
+                click.secho(f"No matching cd_nom found for taxon: {self.data["taxonKey"]}", fg="yellow")
             return cd_nom
         except Exception as e:
             # logger.error("<fetch_taxref_cd_nom> ERROR %s", e)
@@ -192,10 +194,6 @@ class GBIFParser(JSONParser):
                     try:
                         date_min, date_max = generate_date_range(self.data["eventDate"])
                         self.data.update({"dateStart": date_min, "dateEnd": date_max})
-                        click.secho(
-                            f"date: {self.data['eventDate']}, {date_min}, {date_max}",
-                            fg="blue",
-                        )
                         yield self.data
                     except ValueError as e:
                         click.secho(f"Trying to get occurence date: {e}", fg="red")
