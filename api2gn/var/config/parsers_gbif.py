@@ -53,13 +53,9 @@ class GBIFParserInaturalist(GBIFParser):
     mapping = {
         # "unique_id_sinp": "xxx",
         # "unique_id_sinp_grp": "xxx",
-        "date_min": "eventDate",
-        "date_max": "eventDate",
         "nom_cite": "scientificName",
         "observers": "recordedBy",
         "determiner": "recordedBy",
-        "meta_create_date": "eventDate",
-        "meta_update_date": "eventDate",
         "place_name": "verbatimLocality",
     }
 

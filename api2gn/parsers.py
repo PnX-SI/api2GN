@@ -119,12 +119,15 @@ class Parser(GeometryMixin, NomenclatureMixin):
         pass
 
     def save_history(self):
-        self.parser_obj.last_import = datetime.now()
-        self.parser_obj.nb_row_last_import = self.nb_row_imported
-        self.parser_obj.nb_row_total = self.nb_row_imported + (
-            self.parser_obj.nb_row_total or 0
-        )
-        db.session.commit()
+        try:
+            self.parser_obj.last_import = datetime.now()
+            self.parser_obj.nb_row_last_import = self.nb_row_imported
+            self.parser_obj.nb_row_total = self.nb_row_imported + (
+                self.parser_obj.nb_row_total or 0
+            )
+            db.session.commit()
+        except Exception as e:
+            click.secho(f"<save_history> Error {e}", fg="red")
 
     def run(self, dry_run=False):
         click.secho(f"Start import {self.name} ...", fg="green")
@@ -135,10 +138,13 @@ class Parser(GeometryMixin, NomenclatureMixin):
         if self.progress_bar:
             pbar = tqdm(total=100)
         for row in self.next_row():
-            obj = self.build_object(row)
-            if not obj:
-                continue
-            self.insert(obj)
+            try :
+                obj = self.build_object(row)
+                if not obj:
+                    continue
+                self.insert(obj)
+            except Exception as e:
+                click.secho(f"<run> Build and insert object error {e}", fg="red")
             self.nb_row_imported += 1
             if self.progress_bar:
                 previous_percetage = (self.nb_row_imported / self.total) * 100
@@ -153,7 +159,10 @@ class Parser(GeometryMixin, NomenclatureMixin):
             fg="green",
         )
         if not dry_run:
-            db.session.commit()
+            try:
+                db.session.commit()
+            except Exception as e:
+                click.secho(f"<run> Commit changes error {e}", fg="red")
         self.save_history()
         self.end()
         click.secho(f"Successfully import {self.nb_row_imported} row(s)", fg="green")

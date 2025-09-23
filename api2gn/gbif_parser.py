@@ -1,9 +1,11 @@
+import logging
 from pygbif import occurrences, registry, species
 from shapely import wkt
 from sqlalchemy import select
 from sqlalchemy.sql import func
 from geoalchemy2.shape import from_shape
 from api2gn.parsers import JSONParser
+from api2gn.utils import generate_date_range
 import requests
 import click
 
@@ -63,6 +65,7 @@ class GBIFParser(JSONParser):
 
         # filter to have only new data
         if self.parser_obj.last_import:
+            click.secho(f"Prepare to retrieve data new since {self.parser_obj.last_import}", fg="blue")
             self.api_filters["lastInterpreted"] = ",".join(
                 [
                     self.parser_obj.last_import.strftime("%Y-%m-%d"),
@@ -98,13 +101,13 @@ class GBIFParser(JSONParser):
         total_number = response["count"]
         if total_number == 0:
             return
-        if total_number >= 10000:
+        if total_number > 100000:
             click.secho(
                 "To much data use download function first or change download params",
                 fg="red",
             )
             return
-        click.secho(f"get data {offset + limit}/ {total_number}", fg="green")
+        click.secho(f"get data {offset + limit}/{total_number}", fg="green")
 
         search_occurence = {
             result["key"]: result
@@ -138,13 +141,17 @@ class GBIFParser(JSONParser):
         return response.json()
 
     def fetch_taxref_cd_nom(self):
-        cd_nom = db.session.scalar(
-            select(TaxrefLiens.cd_nom)
-            .where(TaxrefLiens.ct_name == "GBIF")
-            .where(TaxrefLiens.ct_sp_id == str(self.data["taxonKey"]))
-            .limit(1)
-        )
-        return cd_nom
+        try:
+            cd_nom = db.session.scalar(
+                select(TaxrefLiens.cd_nom)
+                .where(TaxrefLiens.ct_name == "GBIF")
+                .where(TaxrefLiens.ct_sp_id == str(self.data["taxonKey"]))
+                .limit(1)
+            )
+            return cd_nom
+        except Exception as e:
+            # logger.error("<fetch_taxref_cd_nom> ERROR %s", e)
+            click.secho(f"fetching taxref cd_nom in Error: {e}", fg="red")
 
     @property
     def items(self):
@@ -162,19 +169,16 @@ class GBIFParser(JSONParser):
         return None
 
     def next_row(self):
-        for occurrence_id in self.row_data.keys():
+        for occurrence_id, data in self.row_data.items():
             self.occurrence_id = occurrence_id
-            self.data = self.fetch_occurrence_data(occurrence_id)
-
-            # test uuid
+            self.data = data
             try:
                 from uuid import UUID
 
-                uuid_obj = UUID(self.data["identifier"])
-                self.data["identifier"] = self.data["identifier"]
-            except ValueError:
+                identifier = self.data["identifiers"][0]["identifier"]
+                self.data["identifier"] = UUID(identifier)
+            except (ValueError, KeyError):
                 self.data["identifier"] = None
-
             self.data["cd_nom"] = self.fetch_taxref_cd_nom()
             nomeclature_key = ["sex", "lifeStage", "occurrenceStatus"]
             for key in nomeclature_key:
@@ -185,22 +189,32 @@ class GBIFParser(JSONParser):
             # self.subdivisions_data = self.fetch_subdivisions_data()
 
             if self.data["cd_nom"]:
-                yield self.data
+                if "eventDate" in self.data:
+                    try:
+                        date_min, date_max = generate_date_range(self.data["eventDate"])
+                        self.data.update({"dateStart": date_min, "dateEnd": date_max})
+                        click.secho(
+                            f"date: {self.data['eventDate']}, {date_min}, {date_max}",
+                            fg="blue",
+                        )
+                        yield self.data
+                    except ValueError as e:
+                        click.secho(f"Trying to get occurence date: {e}", fg="red")
             else:
                 yield None
 
     ### Mapping a améliorer
     mapping = {
         "unique_id_sinp": "identifier",
-        "date_min": "eventDate",
-        "date_max": "eventDate",
+        "date_min": "dateStart",
+        "date_max": "dateEnd",
         "nom_cite": "scientificName",
         "count_min": "individualCount",
         "count_max": "individualCount",
         "observers": "recordedBy",
         "determiner": "recordedBy",
-        "meta_create_date": "eventDate",
-        "meta_update_date": "eventDate",
+        # "meta_create_date": "eventDate",
+        # "meta_update_date": "eventDate",
         "place_name": "verbatimLocality",
         "entity_source_pk_value": "catalogNumber",
         "cd_nom": "cd_nom",
