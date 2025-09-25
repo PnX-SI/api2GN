@@ -21,14 +21,13 @@ class GBIFParserInaturalist(GBIFParser):
     description = "Le Parser GBIF_INaturalist permet de récupérer les données en provenance de INaturalist depuis la plateforme du GBIF. Vous pouvez mettre un JDD et une zone geographique, ou une liste d'identifiants" 
     # url = "" # pas nécessaire car usage de la lib pygbif
 
-    limit = 100 # Limit du parser, mettre équivalent du limit de l'API
+    limit = 100 # Limit du parser, mettre équivalent du limit de l'API (max 300)
     # filter api search occurences
     # Mettre en commentaire pour utiliser la recherche par id_occurence
     ## Vous pouvez remplacer les valeurs pour filtrer
     api_filters = {
         "datasetKey": "50c9509d-22c7-4a22-a47d-8c48425ef4a7", ## INaturalist research grade
         "wkt" : "POLYGON((-5.3685 46.16181,-0.53236 46.16181,-0.53236 49.21621,-5.3685 49.21621,-5.3685 46.16181))", ## Polygon Bretagne -> get via url de https://www.gbif.org/occurrence/map?
-        "limit" : "100" , 
         }
     
     # Mettre en commentaire pour utiliser la recherche API
