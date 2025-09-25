@@ -67,7 +67,10 @@ class GBIFParser(JSONParser):
 
         # filter to have only new data
         if self.parser_obj.last_import:
-            click.secho(f"Prepare to retrieve data new since {self.parser_obj.last_import}", fg="blue")
+            click.secho(
+                f"Prepare to retrieve data new since {self.parser_obj.last_import}",
+                fg="blue",
+            )
             self.api_filters["lastInterpreted"] = ",".join(
                 [
                     self.parser_obj.last_import.strftime("%Y-%m-%d"),
@@ -151,10 +154,16 @@ class GBIFParser(JSONParser):
                 .limit(1)
             )
             if not cd_nom:
-                click.secho(f"[data #{self.occurrence_id}] No matching cd_nom found for taxon: {self.data["taxonKey"]}", fg="yellow")
+                click.secho(
+                    f'[data #{self.occurrence_id}] No matching cd_nom found for taxon: {self.data["taxonKey"]}',
+                    fg="yellow",
+                )
             return cd_nom
         except Exception as e:
-            click.secho(f"[data #{self.occurrence_id}] Fetching taxref cd_nom in Error: {e}", fg="red")
+            click.secho(
+                f"[data #{self.occurrence_id}] Fetching taxref cd_nom in Error: {e}",
+                fg="red",
+            )
 
     @property
     def items(self):
@@ -170,7 +179,10 @@ class GBIFParser(JSONParser):
             geom = wkt.loads(point)
             return from_shape(geom, srid=4326)
         else:
-            click.secho(f"[data #{self.occurrence_id}] Could not get geom X/Y fields", fg="yellow")
+            click.secho(
+                f"[data #{self.occurrence_id}] Could not get geom X/Y fields",
+                fg="yellow",
+            )
         return None
 
     def next_row(self):
@@ -201,11 +213,12 @@ class GBIFParser(JSONParser):
                         self.data.update({"dateStart": date_min, "dateEnd": date_max})
                         yield self.data
                     except ValueError as e:
-                        click.secho(f"[data #{self.occurrence_id}] Could not get properly occurence date: {e}", fg="red")
+                        click.secho(
+                            f"[data #{self.occurrence_id}] Could not get properly occurence date: {e}",
+                            fg="red",
+                        )
             else:
                 yield None
-
-
 
     ### Mapping a améliorer
     mapping = {
