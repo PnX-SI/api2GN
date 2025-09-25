@@ -53,6 +53,9 @@ class GBIFParser(JSONParser):
 
     def __init__(self):
         self.api_filters = {**GBIFParser.api_filters, **self.api_filters}
+        if self.limit > 300:
+            # The API caps the number of items at 300 per call
+            self.limit = 300
         self.mapping = {**GBIFParser.mapping, **self.mapping}
         self.constant_fields = {
             **GBIFParser.constant_fields,
@@ -89,11 +92,11 @@ class GBIFParser(JSONParser):
 
     def fetch_occurrence_ids_search(self):
         click.secho(f"Fetching data from GBIF", fg="green")
-        self.gbif_search_occurence(self.api_filters["limit"], offset=0)
+        self.gbif_search_occurence(self.limit, offset=0)
         return self.row_data
 
     def gbif_search_occurence(self, limit=1000, offset=0):
-        self.api_filters["limit"] = limit
+        self.api_filters["limit"] = self.limit
         self.api_filters["offset"] = offset
         response = occurrences.search(**dict(self.api_filters))
 
@@ -106,7 +109,7 @@ class GBIFParser(JSONParser):
                 fg="red",
             )
             return
-        click.secho(f"get data {offset + limit}/{total_number}", fg="green")
+        click.secho(f"Get data {offset + limit}/{total_number}", fg="green")
 
         search_occurence = {
             result["key"]: result
@@ -148,11 +151,10 @@ class GBIFParser(JSONParser):
                 .limit(1)
             )
             if not cd_nom:
-                click.secho(f"No matching cd_nom found for taxon: {self.data["taxonKey"]}", fg="yellow")
+                click.secho(f"[data #{self.occurrence_id}] No matching cd_nom found for taxon: {self.data["taxonKey"]}", fg="yellow")
             return cd_nom
         except Exception as e:
-            # logger.error("<fetch_taxref_cd_nom> ERROR %s", e)
-            click.secho(f"fetching taxref cd_nom in Error: {e}", fg="red")
+            click.secho(f"[data #{self.occurrence_id}] Fetching taxref cd_nom in Error: {e}", fg="red")
 
     @property
     def items(self):
@@ -167,10 +169,13 @@ class GBIFParser(JSONParser):
             point = f"POINT({row['decimalLongitude']} {row['decimalLatitude']})"
             geom = wkt.loads(point)
             return from_shape(geom, srid=4326)
+        else:
+            click.secho(f"[data #{self.occurrence_id}] Could not get geom X/Y fields", fg="yellow")
         return None
 
     def next_row(self):
         for occurrence_id, data in self.row_data.items():
+            self.counter += 1
             self.occurrence_id = occurrence_id
             self.data = data
             try:
@@ -196,9 +201,11 @@ class GBIFParser(JSONParser):
                         self.data.update({"dateStart": date_min, "dateEnd": date_max})
                         yield self.data
                     except ValueError as e:
-                        click.secho(f"Trying to get occurence date: {e}", fg="red")
+                        click.secho(f"[data #{self.occurrence_id}] Could not get properly occurence date: {e}", fg="red")
             else:
                 yield None
+
+
 
     ### Mapping a améliorer
     mapping = {
@@ -210,8 +217,6 @@ class GBIFParser(JSONParser):
         "count_max": "individualCount",
         "observers": "recordedBy",
         "determiner": "recordedBy",
-        # "meta_create_date": "eventDate",
-        # "meta_update_date": "eventDate",
         "place_name": "verbatimLocality",
         "entity_source_pk_value": "catalogNumber",
         "cd_nom": "cd_nom",
