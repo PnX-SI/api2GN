@@ -1,3 +1,10 @@
+import requests
+import click
+import time
+import math
+import random
+from requests import Response
+
 from pygbif import occurrences, registry
 from shapely import wkt
 from sqlalchemy import select
@@ -5,14 +12,51 @@ from sqlalchemy.sql import func
 from geoalchemy2.shape import from_shape
 from api2gn.parsers import JSONParser
 from api2gn.utils import generate_date_range
-import requests
-import click
+
 
 from geonature.utils.env import db
 
 from apptax.taxonomie.models import TaxrefLiens
 
 from geonature.core.gn_meta.models import TDatasets, TAcquisitionFramework
+
+
+def sleep_from_retry_after(
+    resp: Response, default_backoff_s: float = 1.0, attempt: int = 0
+):
+    """Attend selon Retry-After si présent, sinon backoff exponentiel (avec jitter)."""
+    retry_after = resp.headers.get("Retry-After")
+    if retry_after:
+        try:
+            # Retry-After peut être un nombre de secondes ou une date HTTP (RFC 7231).
+            delay = float(retry_after)
+        except ValueError:
+            # Si c'est une date, on peut la parser; ici on applique un délai par défaut.
+            delay = max(default_backoff_s, 2.0)
+    else:
+        # Backoff exponentiel avec jitter
+        base = default_backoff_s * (2**attempt)
+        delay = base + random.uniform(0, base / 2.0)
+    click.secho(
+        f"429 Client Error: Too Many Requests for url. Waiting up to {delay} seconds and retry",
+        fg="red",
+    )
+    time.sleep(delay)
+
+
+def get_with_rate_limit(url, params=None, max_attempts=5, session=None, timeout=30):
+    sess = session or requests.Session()
+    attempt = 0
+    while attempt < max_attempts:
+        resp = sess.get(url, params=params, timeout=timeout)
+        if resp.status_code == 429:
+            sleep_from_retry_after(resp, default_backoff_s=1.0, attempt=attempt)
+            attempt += 1
+            continue
+        resp.raise_for_status()
+        return resp
+    raise RuntimeError(f"Échec après {max_attempts} tentatives (429 persistant).")
+
 
 # https://dwc.tdwg.org/list/#dwc_occurrenceStatus
 # http://rs.tdwg.org/dwc/terms/lifeStage
@@ -84,7 +128,7 @@ class GBIFParser(JSONParser):
                     self.parser_obj.last_import.strftime("%Y-%m-%d"),
                     datetime.now().strftime("%Y-%m-%d"),
                 ]
-            )
+            ) 
         self.data = None
 
         self.validate_maping()
@@ -186,12 +230,23 @@ class GBIFParser(JSONParser):
     def fetch_occurrence_ids_search(self):
         click.secho(f"Fetching data from GBIF", fg="green")
         self.gbif_search_occurence(self.limit, offset=0)
+
         return self.row_data
 
     def gbif_search_occurence(self, limit=1000, offset=0):
         self.api_filters["limit"] = self.limit
         self.api_filters["offset"] = offset
-        response = occurrences.search(**dict(self.api_filters))
+
+        s = requests.Session()
+        try:
+            response = get_with_rate_limit(
+                "https://api.gbif.org/v1/occurrence/search",
+                params=self.api_filters,
+                session=s,
+            )
+            response = response.json()
+        except Exception as e:
+            print("Erreur:", e)
 
         total_number = response["count"]
         if total_number == 0:
