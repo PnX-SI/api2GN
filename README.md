@@ -1,11 +1,33 @@
 # Installation
 
-    #Depuis le venv de GeoNature
-    source <GeoNature_DIR>/backend/venv/bin/activate
+```
+    # Récupération de l'archive
+    wget https://github.com/PnX-SI/api2GN/archive/1.0.0.rc1.zip
+    unzip 1.0.0.rc1.zip
+    rm 1.0.0.rc1.zip
+    mv api2GN-1.0.0.rc1/ api2GN
+
+    # Depuis le venv de GeoNature
+    cd geonature
+    source backend/venv/bin/activate
+    
     # depuis le répertoire API2GN
-    pip install .
+    pip install .    
+    pip install -e .
+    -> as mode dev
+
+    # Ajout du module dans l'interface admin geonature
+    geonature install-gn-module ~/api2GN  API2GN 
+
+    # Update de la DB
+    geonature db upgrade api2gn@head
+
+```
 
 Copier le fichier d'exemple `var/config/parsers.example.py` en `var/config/parsers.py`
+```
+cp var/config/parsers.example.py var/config/parsers.py
+```
 
 ## Commandes 
 
@@ -18,6 +40,8 @@ Copier le fichier d'exemple `var/config/parsers.example.py` en `var/config/parse
 - Lancer un parser
     ```
     geonature parser run <PARSER_NAME>
+    geonature parser run <PARSER_NAME> --dry-run
+    -> pour ne pas impacter le test en bdd
     ```
 
 ### Créer ses propres parser
