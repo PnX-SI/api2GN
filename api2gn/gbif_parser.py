@@ -19,6 +19,14 @@ from geonature.utils.env import db
 from apptax.taxonomie.models import TaxrefLiens
 
 from geonature.core.gn_meta.models import TDatasets, TAcquisitionFramework
+from geonature.core.gn_synthese.models import Synthese
+
+
+def calculate_gbif_precision(value):
+    if "coordinateUncertaintyInMeters" in value:
+        return int(value["coordinateUncertaintyInMeters"])
+    # Default gps precision
+    return 10
 
 
 def sleep_from_retry_after(
@@ -331,6 +339,21 @@ class GBIFParser(JSONParser):
                     id_dataset = self._test_dataset_uuid(self.data["datasetKey"])
                     self.data.update({"id_dataset": id_dataset})
 
+                # Check if data is already in db
+                # if true updata row
+                synthese_data = db.session.scalar(
+                    select(Synthese)
+                    .where(Synthese.entity_source_pk_value == self.data["gbifID"])
+                    .where(Synthese.id_dataset == self.data["id_dataset"])
+                    .limit(1)
+                )
+                if synthese_data:
+                    click.secho(
+                        f"[data #{self.occurrence_id}] Update existing synthese row {synthese_data.id_synthese}",
+                        fg="blue",
+                    )
+                    self.data.update({"id_synthese": synthese_data.id_synthese})
+
                 if "eventDate" in self.data:
                     try:
                         date_min, date_max = generate_date_range(self.data["eventDate"])
@@ -346,6 +369,7 @@ class GBIFParser(JSONParser):
             else:
                 yield None
 
+    dynamic_fields = {"precision": calculate_gbif_precision}
     ### Mapping a améliorer
     mapping = {
         "unique_id_sinp": "identifier",
