@@ -261,7 +261,7 @@ class GBIFParser(JSONParser):
             return
         if total_number > 100000:
             click.secho(
-                "To much data use download function first or change download params",
+                "Too much data use download function first or change download params",
                 fg="red",
             )
             return

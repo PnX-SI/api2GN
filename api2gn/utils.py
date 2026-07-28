@@ -1,6 +1,5 @@
 import inspect
 from importlib import import_module
-import click
 from dateutil.parser import parse
 import re
 from datetime import datetime, timedelta
@@ -70,7 +69,6 @@ def get_parser(name):
         if parser.name == name:
             selected_parser = parser
     if not selected_parser:
-        click.secho(f"Cannot find parser {name}")
         return None
     module = import_module("api2gn.var.config.parsers")
     return getattr(module, selected_parser.__name__)
