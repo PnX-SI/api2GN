@@ -317,6 +317,23 @@ class GBIFParser(JSONParser):
             )
         return None
 
+    def build_object(self, row):
+        if not row:
+            return None
+
+        existing_synthese = row.pop("_existing_synthese", None)
+        parsed_synthese = super().build_object(row)
+
+        if parsed_synthese is None or existing_synthese is None:
+            return parsed_synthese
+
+        for attribute, value in vars(parsed_synthese).items():
+            if attribute in {"_sa_instance_state", "id_synthese"}:
+                continue
+            setattr(existing_synthese, attribute, value)
+
+        return existing_synthese
+
     def next_row(self):
         for occurrence_id, data in self.row_data.items():
             self.counter += 1
@@ -335,9 +352,24 @@ class GBIFParser(JSONParser):
                 self.data[key] = self._get_cd_nomenclature(key, self.data.get(key))
 
             if self.data["cd_nom"]:
-                if not "id_dataset" in self.data and self.create_dataset:
-                    id_dataset = self._test_dataset_uuid(self.data["datasetKey"])
-                    self.data.update({"id_dataset": id_dataset})
+                # Populate self.data["id_dataset"]
+                if self.data.get("id_dataset") is None:
+                    if self.create_dataset:
+                        dataset_key = self.data.get("datasetKey")
+                        if dataset_key is None:
+                            raise ValueError(
+                                "datasetKey is required when create_dataset=True"
+                            )
+                        id_dataset = self._test_dataset_uuid(dataset_key)
+                    else:
+                        id_dataset = self.constant_fields.get("id_dataset")
+                        if id_dataset is None:
+                            raise ValueError(
+                                "id_dataset must be provided in constant_fields "
+                                "when create_dataset=False"
+                            )
+
+                    self.data["id_dataset"] = id_dataset
 
                 # Check if data is already in db
                 # if true updata row
@@ -352,7 +384,7 @@ class GBIFParser(JSONParser):
                         f"[data #{self.occurrence_id}] Update existing synthese row {synthese_data.id_synthese}",
                         fg="blue",
                     )
-                    self.data.update({"id_synthese": synthese_data.id_synthese})
+                    self.data["_existing_synthese"] = synthese_data
 
                 if "eventDate" in self.data:
                     try:
