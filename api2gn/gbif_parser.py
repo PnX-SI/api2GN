@@ -151,6 +151,8 @@ class GBIFParser(JSONParser):
             if self.create_dataset and not self.af_id:
                 self.af_id = self._get_or_create_af()
 
+
+            db.session.rollback()
             self.fetch_occurrence_ids_search()
 
     def _test_dataset_uuid(self, uuid):
@@ -298,12 +300,12 @@ class GBIFParser(JSONParser):
         total_number = response["count"]
         if total_number == 0:
             return
-        # if total_number > 100000:
-        #     click.secho(
-        #         "Too much data use download function first or change download params",
-        #         fg="red",
-        #     )
-        #     return
+        if total_number > 100000:
+            click.secho(
+                "Too much data use download function first or change download params",
+                fg="red",
+            )
+            return
         click.secho(f"Get data {offset + limit}/{total_number}", fg="green")
 
         search_occurence = {
