@@ -8,6 +8,7 @@ from datetime import datetime
 import click
 
 from tqdm import tqdm
+from sqlalchemy import select
 from sqlalchemy.sql import func
 from shapely.geometry import shape
 from geoalchemy2.shape import from_shape
@@ -69,7 +70,9 @@ class Parser(GeometryMixin, NomenclatureMixin):
         return self.root
 
     def _get_or_create_parser(self):
-        parser = ParserModel.query.filter_by(name=self.name).one_or_none()
+        parser = db.session.scalars(
+            select(ParserModel).where(ParserModel.name == self.name)
+        ).one_or_none()
         if not parser:
             parser = ParserModel(
                 name=self.name,
