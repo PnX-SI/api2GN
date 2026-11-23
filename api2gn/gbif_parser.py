@@ -151,6 +151,8 @@ class GBIFParser(JSONParser):
             if self.create_dataset and not self.af_id:
                 self.af_id = self._get_or_create_af()
 
+
+            db.session.rollback()
             self.fetch_occurrence_ids_search()
 
     def _test_dataset_uuid(self, uuid):
@@ -241,27 +243,66 @@ class GBIFParser(JSONParser):
 
         return self.row_data
 
-    def gbif_search_occurence(self, limit=1000, offset=0):
+    def gbif_search_occurence(
+        self, limit=1000, offset=0, max_session_attempts=5
+    ):
         self.api_filters["limit"] = self.limit
         self.api_filters["offset"] = offset
 
-        s = requests.Session()
-        try:
-            response = get_with_rate_limit(
-                "https://api.gbif.org/v1/occurrence/search",
-                params=self.api_filters,
-                session=s,
+        for attempt in range(1, max_session_attempts + 1):
+            try:
+                # L'API GBIF prolonge les délais de réponse entre chaque appel, 
+                # si on a un timeout ou une erreur, on retente avec une nouvelle
+                # session
+                with requests.Session() as session:
+                    response = get_with_rate_limit(
+                        "https://api.gbif.org/v1/occurrence/search",
+                        params=self.api_filters,
+                        session=session,
+                    )
+                    response = response.json()
+                break
+            except (requests.Timeout, requests.ConnectionError) as e:
+                click.secho(
+                    "Erreur réseau lors de la récupération des données GBIF "
+                    f"(tentative {attempt}/{max_session_attempts}) : {e}",
+                    fg="red",
+                )
+            except requests.HTTPError as e:
+                status_code = (
+                    e.response.status_code if e.response is not None else None
+                )
+                if status_code not in {500, 502, 503, 504}:
+                    raise click.ClickException(
+                        f"Échec de la récupération des données GBIF : {e}"
+                    ) from e
+                click.secho(
+                    f"Erreur temporaire GBIF HTTP {status_code} "
+                    f"(tentative {attempt}/{max_session_attempts}). "
+                    "Nouvelle tentative avec une nouvelle session.",
+                    fg="red",
+                )
+            except Exception as e:
+                raise click.ClickException(
+                    f"Échec de la récupération des données GBIF : {e}"
+                ) from e
+
+            if attempt < max_session_attempts:
+                # On joue sur le délai entre chaque relance pour écarter le risque de récidive
+                time.sleep(min(2 ** (attempt - 1), 30))
+        else:
+            raise click.ClickException(
+                "Téléchargement GBIF incomplet : abandon après "
+                f"{max_session_attempts} sessions à l'offset {offset}. "
+                "Aucune donnée ne sera importée."
             )
-            response = response.json()
-        except Exception as e:
-            print("Erreur:", e)
 
         total_number = response["count"]
         if total_number == 0:
             return
         if total_number > 100000:
             click.secho(
-                "To much data use download function first or change download params",
+                "Too much data use download function first or change download params",
                 fg="red",
             )
             return
@@ -275,7 +316,11 @@ class GBIFParser(JSONParser):
         if search_occurence:
             self.row_data = self.row_data | search_occurence
         if response["endOfRecords"] == False:
-            self.gbif_search_occurence(limit=limit, offset=limit + offset)
+            self.gbif_search_occurence(
+                limit=limit,
+                offset=limit + offset,
+                max_session_attempts=max_session_attempts,
+            )
 
     def fetch_taxref_cd_nom(self):
         try:
@@ -317,6 +362,23 @@ class GBIFParser(JSONParser):
             )
         return None
 
+    def build_object(self, row):
+        if not row:
+            return None
+
+        existing_synthese = row.pop("_existing_synthese", None)
+        parsed_synthese = super().build_object(row)
+
+        if parsed_synthese is None or existing_synthese is None:
+            return parsed_synthese
+
+        for attribute, value in vars(parsed_synthese).items():
+            if attribute in {"_sa_instance_state", "id_synthese"}:
+                continue
+            setattr(existing_synthese, attribute, value)
+
+        return existing_synthese
+
     def next_row(self):
         for occurrence_id, data in self.row_data.items():
             self.counter += 1
@@ -335,9 +397,24 @@ class GBIFParser(JSONParser):
                 self.data[key] = self._get_cd_nomenclature(key, self.data.get(key))
 
             if self.data["cd_nom"]:
-                if not "id_dataset" in self.data and self.create_dataset:
-                    id_dataset = self._test_dataset_uuid(self.data["datasetKey"])
-                    self.data.update({"id_dataset": id_dataset})
+                # Populate self.data["id_dataset"]
+                if self.data.get("id_dataset") is None:
+                    if self.create_dataset:
+                        dataset_key = self.data.get("datasetKey")
+                        if dataset_key is None:
+                            raise ValueError(
+                                "datasetKey is required when create_dataset=True"
+                            )
+                        id_dataset = self._test_dataset_uuid(dataset_key)
+                    else:
+                        id_dataset = self.constant_fields.get("id_dataset")
+                        if id_dataset is None:
+                            raise ValueError(
+                                "id_dataset must be provided in constant_fields "
+                                "when create_dataset=False"
+                            )
+
+                    self.data["id_dataset"] = id_dataset
 
                 # Check if data is already in db
                 # if true updata row
@@ -352,7 +429,7 @@ class GBIFParser(JSONParser):
                         f"[data #{self.occurrence_id}] Update existing synthese row {synthese_data.id_synthese}",
                         fg="blue",
                     )
-                    self.data.update({"id_synthese": synthese_data.id_synthese})
+                    self.data["_existing_synthese"] = synthese_data
 
                 if "eventDate" in self.data:
                     try:
