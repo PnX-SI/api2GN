@@ -23,6 +23,8 @@ class NomenclatureMixin:
         "id_nomenclature_blurring": "DEE_FLOU",
         "id_nomenclature_source_status": "STATUT_SOURCE",
         "id_nomenclature_determination_method": "METH_DETERMIN",
+        "id_nomenclature_sex": "SEXE",
+        "id_nomenclature_life_stage": "STADE_VIE",
     }
 
 

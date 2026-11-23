@@ -27,7 +27,7 @@ def upgrade():
 
         INSERT INTO gn_commons.t_modules
         (module_code, module_label, module_desc, module_external_url, active_frontend, active_backend)
-        VALUES('API2GN', 'Api2GN', 'Module API2GN', '_blank', false, false);
+        VALUES('API2GN', 'Api2GN', 'Module API2GN', '_blank', false, false) ON CONFLICT DO NOTHING;
 
         INSERT INTO
                 gn_permissions.t_permissions_available (

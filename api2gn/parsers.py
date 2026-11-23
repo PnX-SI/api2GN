@@ -45,6 +45,7 @@ class Parser(GeometryMixin, NomenclatureMixin):
     progress_bar = False
     page_parameter = "page"
     limit_parameter = "limit"
+    counter = 0
 
     def __init__(
         self,
@@ -119,12 +120,15 @@ class Parser(GeometryMixin, NomenclatureMixin):
         pass
 
     def save_history(self):
-        self.parser_obj.last_import = datetime.now()
-        self.parser_obj.nb_row_last_import = self.nb_row_imported
-        self.parser_obj.nb_row_total = self.nb_row_imported + (
-            self.parser_obj.nb_row_total or 0
-        )
-        db.session.commit()
+        try:
+            self.parser_obj.last_import = datetime.now()
+            self.parser_obj.nb_row_last_import = self.nb_row_imported
+            self.parser_obj.nb_row_total = self.nb_row_imported + (
+                self.parser_obj.nb_row_total or 0
+            )
+            db.session.commit()
+        except Exception as e:
+            click.secho(f"<save_history> Error {e}", fg="red")
 
     def run(self, dry_run=False):
         click.secho(f"Start import {self.name} ...", fg="green")
@@ -135,10 +139,13 @@ class Parser(GeometryMixin, NomenclatureMixin):
         if self.progress_bar:
             pbar = tqdm(total=100)
         for row in self.next_row():
-            obj = self.build_object(row)
-            if not obj:
-                continue
-            self.insert(obj)
+            try:
+                obj = self.build_object(row)
+                if not obj:
+                    continue
+                self.insert(obj)
+            except Exception as e:
+                click.secho(f"<run> Build and insert object error {e}", fg="red")
             self.nb_row_imported += 1
             if self.progress_bar:
                 previous_percetage = (self.nb_row_imported / self.total) * 100
@@ -153,14 +160,27 @@ class Parser(GeometryMixin, NomenclatureMixin):
             fg="green",
         )
         if not dry_run:
-            db.session.commit()
+            try:
+                db.session.commit()
+            except Exception as e:
+                click.secho(f"<run> Commit changes error {e}", fg="red")
         self.save_history()
         self.end()
         click.secho(f"Successfully import {self.nb_row_imported} row(s)", fg="green")
+        if self.counter > self.nb_row_imported:
+            click.secho(f"{self.counter-self.nb_row_imported} row(s) could not be imported", fg="red")
 
 
 class JSONParser(Parser):
     limit = 100
+
+    def validate_maping(self):
+        """
+        Validate the mapping throw the model (only Synthese model implemented)
+        """
+        MappingValidator(
+            {**self.mapping, **self.constant_fields, **self.dynamic_fields}
+        ).validate()
 
     def get_geom(self, row):
         """
@@ -170,12 +190,17 @@ class JSONParser(Parser):
         return from_shape(shapely_geom, srid=self.srid)
 
     def build_object(self, row):
+        if not row:
+            return None
+
         synthese_dict = {}
         for gn_col, const in self.constant_fields.items():
             synthese_dict[gn_col] = const
             self.mapping.pop(gn_col, None)
         for gn_col, _func in self.dynamic_fields.items():
-            synthese_dict[gn_col] = _func(row)
+            value = _func(row)
+            if value:
+                synthese_dict[gn_col] = _func(row)
             self.mapping.pop(gn_col, None)
         if self.additionnal_fields:
             for add_field, json_field in self.additionnal_fields.items():
@@ -185,23 +210,29 @@ class JSONParser(Parser):
                 ]
 
         for gn_col, json_field in self.mapping.items():
-            if gn_col.startswith("id_nomenclature"):
-                try:
-                    nomenclature_mnemonique_type = self.nomenclature_mapping[gn_col]
-                except KeyError as e:
-                    click.secho(
-                        f"\nCannot find a nomenclature mnemonique type for `{gn_col}` - Please update the `nomenclature_mapping` class attribute",
-                        fg="red",
+            if row.get(json_field):
+                if gn_col.startswith("id_nomenclature"):
+                    try:
+                        nomenclature_mnemonique_type = self.nomenclature_mapping[gn_col]
+                    except KeyError as e:
+                        click.secho(
+                            f"\nCannot find a nomenclature mnemonique type for `{gn_col}` - Please update the `nomenclature_mapping` class attribute",
+                            fg="red",
+                        )
+                        raise click.ClickException("Stop import")
+                    synthese_dict[gn_col] = func.ref_nomenclatures.get_id_nomenclature(
+                        nomenclature_mnemonique_type, row.get(json_field)
                     )
-                    raise click.ClickException("Stop import")
-                synthese_dict[gn_col] = func.ref_nomenclatures.get_id_nomenclature(
-                    nomenclature_mnemonique_type, row[json_field]
-                )
-            else:
-                synthese_dict[gn_col] = row[json_field]
+                else:
+                    synthese_dict[gn_col] = row.get(json_field)
         wkb_geom = self.get_geom(row)
         if wkb_geom:
             synthese_dict = self.fill_dict_with_geom(synthese_dict, wkb_geom)
+        else:
+            click.secho(
+                f"!!! No geom for {synthese_dict}",
+                fg="red",
+            )
         return Synthese(**synthese_dict)
 
     def next_row(self, page=0):
@@ -310,9 +341,9 @@ class WFSParser(Parser):
         if self.additionnal_fields:
             for add_field, xml_key in self.additionnal_fields.items():
                 self.mapping.pop(add_field, None)
-                synthese_dict_value.setdefault("additional_data", {})[
-                    add_field
-                ] = self.get_xml_value(self.sub_items, xml_key)
+                synthese_dict_value.setdefault("additional_data", {})[add_field] = (
+                    self.get_xml_value(self.sub_items, xml_key)
+                )
         for gn_col, xml_key in self.mapping.items():
             val = self.get_xml_value(self.sub_items, xml_key)
             synthese_dict_value[gn_col] = val
