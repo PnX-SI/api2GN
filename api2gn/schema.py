@@ -23,7 +23,7 @@ class MappingValidator:
             [
                 col.key
                 for col in mapper.columns
-                if type(col) is Column
+                if isinstance(col, Column)
                 and col.nullable is False
                 and col.primary_key is False
             ]

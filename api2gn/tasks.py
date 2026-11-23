@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta
 
 from celery.schedules import crontab
+from sqlalchemy import select
 
 from geonature.utils.celery import celery_app
+from geonature.utils.env import db
 
 from api2gn.models import ParserModel
 from api2gn.utils import get_parser
@@ -19,8 +21,8 @@ def setup_periodic_tasks(sender, **kwargs):
 
 @celery_app.task(bind=True)
 def run_parsers(self):
-    for parser_db in ParserModel.query.filter(
-        ParserModel.schedule_frequency.isnot(None)
+    for parser_db in db.session.scalars(
+        select(ParserModel).where(ParserModel.schedule_frequency.is_not(None))
     ).all():
         if (
             not parser_db.last_import
