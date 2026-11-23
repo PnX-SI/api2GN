@@ -2,6 +2,6 @@ python-dotenv
 requests
 marshmallow
 pygml
-geonature>2.12.0
+geonature>2.18.0
 tqdm
 pygbif

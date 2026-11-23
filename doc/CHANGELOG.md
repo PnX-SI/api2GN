@@ -3,6 +3,8 @@ CHANGELOG
 1.0.0 (2026-11-23)
 ----------------------
 
+Nécessite GeoNature 2.18 (ou plus)
+
 **🚀 Nouveautés**
 
 - Création d'un parseur permettant d'importer automatiquement les données depuis l'API du GBIF (#5 par @pierre56, @amandine-sahl, @lpofredc).
