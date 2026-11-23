@@ -5,65 +5,60 @@ from api2gn.gbif_parser import GBIFParser
 # Fichier a renommer en parsers.py pour fonctionner car parsers.py dans .gitignore
 # Amélioration a faire, un fichier par parser
 
-### Exemple func
-# def my_custom_func(value):
-#     """
-#     Custom function to fill "observers" synthese with a depending api value
-#     """
-#     if value == "Org 1":
-#         return "Observateur inconnu"
-#     else:
-#         return "Observateur 1"
-
 
 class GBIFParserInaturalist(GBIFParser):
     name = "GBIF_INaturalist"
-    description = "Le Parser GBIF_INaturalist permet de récupérer les données en provenance de INaturalist depuis la plateforme du GBIF. Vous pouvez mettre un JDD et une zone geographique, ou une liste d'identifiants" 
+    description = "Le Parser GBIF_INaturalist permet de récupérer les données en provenance de INaturalist depuis la plateforme du GBIF."
     # url = "" # pas nécessaire car usage de la lib pygbif
 
-    limit = 100 # Limit du parser, mettre équivalent du limit de l'API (max 300)
+    limit = 300  # Limit du parser, mettre équivalent du limit de l'API
+    # filter api search occurences
+    # Mettre en commentaire pour utiliser la recherche par id_occurence
+    ## Vous pouvez remplacer les valeurs pour filtrer
+    #   Documentation complète: https://techdocs.gbif.org/en/openapi/v1/occurrence#/Searching%20occurrences/searchOccurrence
+    api_filters = {
+        "datasetKey": "50c9509d-22c7-4a22-a47d-8c48425ef4a7",  ## INaturalist research grade
+        "geometry": "POLYGON ((3.221396682915761 43.97662194206563, 3.221396682915761 44.515887254953945, 3.9549009899856746 44.515887254953945, 3.9549009899856746 43.97662194206563, 3.221396682915761 43.97662194206563))",
+        "limit": limit,
+    }
+
+    # Création des dataset
+    create_dataset = True
+
+    # pass constant from missing value in my API
+    constant_fields = {
+        "id_source": -1,  # a créer ou a récupérer depuis metadonnées
+    }
+
+
+class GBIFParserOrgAllDatasets(GBIFParser):
+    name = "GBIF_INaturalist_org"
+    description = (
+        "Le Parser GBIFParserOrgAllDatasets permet de récupérer les données en provenance du GBIF."
+    )
+
+    limit = 300  # Limit du parser, mettre équivalent du limit de l'API
     # filter api search occurences
     # Mettre en commentaire pour utiliser la recherche par id_occurence
     ## Vous pouvez remplacer les valeurs pour filtrer
     api_filters = {
-        "datasetKey": "50c9509d-22c7-4a22-a47d-8c48425ef4a7", ## INaturalist research grade
-        "wkt" : "POLYGON((-5.3685 46.16181,-0.53236 46.16181,-0.53236 49.21621,-5.3685 49.21621,-5.3685 46.16181))", ## Polygon Bretagne -> get via url de https://www.gbif.org/occurrence/map?
-        }
-    
-    # Mettre en commentaire pour utiliser la recherche API
-    ## Vous pouvez remplacer par une liste dynamique d'IDs
-    # occurrence_ids = [4508012001]
-    # occurrence_ids = [4508012001, 4507897058, 4507948047, 4507718106, 4507942081]
-    
-    #--> La recherche par id est prioritaire sur la recherche par filtre
-
-    ### Exemple dynamic_fields 
-    # dynamic_fields = {
-    #     # "unique_dataset_id" : "69f26484-08b6-4ccf-aeeb-42124d124fa1", # JDD test Inaturalist
-    #     # "id_dataset" : 705
-    # #    # "occurence_id" : "4407389321",
-    # #     "altitude_min": my_custom_func
-    # }
-
-    # override existant GeoNatureParser mapping
-    # the key is the name of the column is synthese
-    # the value could be a str of the column in the API or a dict for a custom value
-
-    mapping = {
-        # "unique_id_sinp": "xxx",
-        # "unique_id_sinp_grp": "xxx",
-        "nom_cite": "scientificName",
-        "observers": "recordedBy",
-        "determiner": "recordedBy",
-        "place_name": "verbatimLocality",
+        "publishing_org": [
+            "e2e717bf-551a-4917-bdc9-4fa0f342c530",  # Cornell lab
+            "c8d737e0-2ff8-42e8-b8fc-6b805d26fc5f",  # observations.org
+            "28eb1a3f-1c15-4a95-931a-4af90ecb574d",  # iNaturalist
+            "64ee55c9-570a-42af-b7da-3f13c6b4e5a9",  # Swiss National Biodiversity Data and Information Cen...
+            "76c3443b-bf10-4fb6-a6e7-aeaa65be383c",  # ENGIE
+            "d3f94e8a-bb06-4d2b-89a6-6cd66abfa66c",  # EBCC
+            "bb646dff-a905-4403-a49b-6d378c2cf0d9",  # naturgucker.de
+            "1f00d75c-f6fc-4224-a595-975e82d7689c",  # Xeno-canto Foundation for Nature Sounds
+            "9661d20d-86b6-4485-8948-f3c86b022fa7",  # SwissNatColl
+        ],
+        "geometry": "POLYGON ((3.221396682915761 43.97662194206563, 3.221396682915761 44.515887254953945, 3.9549009899856746 44.515887254953945, 3.9549009899856746 43.97662194206563, 3.221396682915761 43.97662194206563))",
+        "limit": limit,
     }
-
+    force_import = True
+    create_dataset = True
     # pass constant from missing value in my API
     constant_fields = {
-        "id_source": 16, # a creer ou a récupérer depuis metadonnées
-        "id_dataset": 705, # Creer JDD test, a terme récupérer les métadonnées et creer JDD en auto
-        "count_min": 1, # Non disponible dans api
-        "count_max": 1, # Non disponible dans api
-        # "cd_nom":  4001,
-
+        "id_source": -1,  # a creer ou a récupérer depuis metadonnées
     }

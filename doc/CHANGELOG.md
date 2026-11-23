@@ -1,5 +1,17 @@
 CHANGELOG
 =========
+1.0.0 (2026-11-23)
+----------------------
+
+**🚀 Nouveautés**
+
+- Création d'un parseur permettant d'importer automatiquement les données depuis l'API du GBIF (#5 par @pierre56, @amandine-sahl, @lpofredc).
+
+**🐛 Corrections**
+
+- Ajout de la compatibilité avec SQLAlchemy 2.0.x (#8 par @amandine-sahl)
+- Ajout de la vérification des permissions d'accès au module dans l'Admin de GeoNature (par @TheoLechemia)
+
 
 1.0.0.rc1 (2023-08-11)
 ----------------------
